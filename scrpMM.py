@@ -2,11 +2,13 @@ import undetected_chromedriver as uc
 import pandas as pd
 import time
 import sys
+import os
+import datetime
 from selenium.webdriver.common.by import By
 
 # --- CONFIGURAÇÃO DOS PARTICIPANTES (IDs de 17 dígitos ATUALIZADOS) ---
 PARTICIPANTES = [
-    {"nome": "gfelicio", "id": "765611980325002"},
+    {"nome": "gfelicio", "id": "76561198188905417"},
     {"nome": "wEs", "id": "76561199581556353"},
     {"nome": "BioAlarcon", "id": "76561198195671534"},
     {"nome": "JOGod", "id": "76561198331541703"},
@@ -36,7 +38,7 @@ def iniciar_driver():
 def extrair_dados_mm(driver, player):
     nome = player['nome']
     steam_id = player['id']
-    url_stats = f"https://csgostats.gg/player/{steam_id}"
+    url_stats = f"https://csgostats.gg/player/{steam_id}?date=30d"
     
     print(f"\n--- 🌍 Acessando perfil de: {nome} ---")
     
@@ -54,7 +56,6 @@ def extrair_dados_mm(driver, player):
 
     dados = {"player": nome, "steam_id": steam_id}
     
-    # Lista de campos para buscar via XPATH por texto (Mais robusto)
     campos_busca = {
         "kdr": "KDR",
         "adr": "ADR",
@@ -65,19 +66,16 @@ def extrair_dados_mm(driver, player):
 
     for chave, texto in campos_busca.items():
         try:
-            # Busca o elemento que contém o nome da estatística e pega o valor seguinte
             xpath = f"//*[contains(text(), '{texto}')]/following-sibling::*"
             valor = driver.find_element(By.XPATH, xpath).text
             dados[chave] = valor
         except:
-            # Tentativa secundária caso o site use um formato diferente
             try:
                 xpath_alt = f"//*[contains(text(), '{texto}')]/..//div"
                 dados[chave] = driver.find_element(By.XPATH, xpath_alt).text
             except:
                 dados[chave] = "N/D"
 
-    # Captura de Kills/Deaths que já estava funcionando
     try:
         dados["kills"] = driver.find_element(By.XPATH, "//div[contains(text(), 'Kills')]/following-sibling::div").text
         dados["deaths"] = driver.find_element(By.XPATH, "//div[contains(text(), 'Deaths')]/following-sibling::div").text
@@ -93,7 +91,7 @@ if __name__ == "__main__":
 
     try:
         print("\n🚀 Navegador pronto! Faça login se necessário.")
-        input("✅ Após o login, pressione ENTER para iniciar o loop...")
+        input("✅ Após o login, pressione ENTER para iniciar o loop com os 8 amigos...")
 
         for p in PARTICIPANTES:
             res = extrair_dados_mm(driver, p)
@@ -102,19 +100,40 @@ if __name__ == "__main__":
             time.sleep(1)
 
     finally:
-        print("\n🏁 Processo concluído. Fechando navegador...")
+        print("\n🏁 Processo concluído. Processando arquivos...")
         driver.quit()
 
     if ranking_final:
-        df = pd.DataFrame(ranking_final)
-        df.to_csv("ranking_mm_bagre.csv", index=False, encoding="utf-8-sig")
+        df_novo = pd.DataFrame(ranking_final)
         
+        # 1. Carimbo de Data (Mês Atual)
+        mes_atual = datetime.datetime.now().strftime("%Y-%m")
+        df_novo['mes'] = mes_atual
+
+        # 2. Salva o arquivo mensal (Dashboard Principal)
+        df_novo.to_csv("ranking_mm_bagre.csv", index=False, encoding="utf-8-sig")
+        
+        # 3. Lógica de Histórico Acumulado
+        ARQUIVO_HIST = "historico_mm_geral.csv"
+        
+        if os.path.exists(ARQUIVO_HIST):
+            df_antigo = pd.read_csv(ARQUIVO_HIST)
+            # Junta novo com antigo e remove duplicatas do mesmo mês
+            df_final = pd.concat([df_antigo, df_novo], ignore_index=True)
+            df_final = df_final.drop_duplicates(subset=['player', 'mes'], keep='last')
+        else:
+            df_final = df_novo
+
+        df_final.to_csv(ARQUIVO_HIST, index=False, encoding="utf-8-sig")
+
         print(f"\n✨ SUCESSO, GUSTAVO!")
+        print(f"📂 Arquivo do Mês: ranking_mm_bagre.csv")
+        print(f"📈 Arquivo Histórico: {ARQUIVO_HIST}")
         print("-" * 60)
         
-        # Converte Rating para número para ordenar
-        df['rating_num'] = pd.to_numeric(df['rating'].str.replace(',', '.'), errors='coerce')
-        print("🏆 RANKING MM (Menor Rating = Mais Bagre):")
-        print(df.sort_values(by='rating_num', ascending=True)[['player', 'rating', 'kdr', 'adr']].to_string(index=False))
+        # Converte Rating para número para exibição rápida
+        df_novo['rating_num'] = pd.to_numeric(df_novo['rating'].str.replace(',', '.'), errors='coerce')
+        print("🏆 RANKING MM ATUAL (Menor Rating = Mais Bagre):")
+        print(df_novo.sort_values(by='rating_num', ascending=True)[['player', 'rating', 'kdr', 'adr']].to_string(index=False))
     else:
         print("\n🛑 Nenhuma informação coletada.")
