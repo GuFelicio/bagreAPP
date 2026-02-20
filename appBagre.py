@@ -3,6 +3,8 @@ import pandas as pd
 import plotly.express as px
 import re
 import numpy as np
+import google.generativeai as genai
+
 
 st.set_page_config(page_title="App Bagre do Mês", layout="wide", page_icon="🐟")
 
@@ -18,6 +20,42 @@ st.markdown("Analise de performance entre GC e MM com pesos científicos de bagr
 
 URL_GC = "ranking_bagre_do_mes.csv"
 URL_MM = "ranking_mm_bagre.csv"
+
+# Configure sua chave (o ideal é usar st.secrets para segurança)
+try:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+except Exception:
+    st.error("🔑 API Key não encontrada nos Secrets do Streamlit!")
+
+def gerar_analise_ia(player_nome, stats):
+    try:
+        # Usando a versão estável com cota garantida no plano gratuito
+        model = genai.GenerativeModel('gemini-1.5-flash') 
+        
+        prompt = f"""
+        Você é um Coach profissional de CS2, conhecido por ser técnico mas muito zoeiro. Você pode pesquisar bastante sobre CS2 e 
+        explicar direitinho o que é preciso fazer para melhorar o desempenho desse jogador! Você faz críticas e elogios também!
+        Analise os seguintes dados do jogador {player_nome} deste mês:
+        - ADR: {stats['adr']:.1f}
+        - KDR: {stats['kdr']:.2f}
+        - WinRate: {stats['winrate']:.1f}%
+        - HS%: {stats['hs']:.1f}%
+        - Score de Bagre: {stats['score']:.1f}
+
+        Escreva um parágrafo curto com elogio, puxão de orelha e dicas de treino. Não misture as falas, zoe ele primeiro e depois dê dicas
+        com uma pitada de zoeira junto.
+        Use gírias de CS (ex: "pinador", "carregador", "baixa o braço", "rusha B", "bagre", "baixa a bola") e seja engraçado.
+        """
+        
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        try:
+            model = genai.GenerativeModel('gemini-flash-latest')
+            response = model.generate_content(prompt)
+            return response.text
+        except:
+            return f"⚠️ O Coach teve um piripaque técnico: {str(e)}"
 
 def clean_val(val):
     # Retorna NaN para valores vazios ou N/D para não estragar a média
@@ -126,7 +164,7 @@ if len(data_list) > 0:
     df['score'] = (score_final / peso_total_efetivo) * 100 if peso_total_efetivo > 0 else 0
     df = df.sort_values('score', ascending=True).reset_index(drop=True)
 
-    tab1, tab2, tab3 = st.tabs(["📊 Dashboard de Performance", "🔍 Estatísticas por Player", "📝 Relatório de Zoeira"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard de Performance", "🔍 Estatísticas por Player", "📝 Relatório de Zoeira", "🧠 AI Scouting"])
 
     with tab1:
         col_bagre, col_mvp = st.columns(2)
@@ -194,6 +232,16 @@ if len(data_list) > 0:
 
         st.text_area("Copie o texto abaixo:", relatorio, height=350)
         st.button("Relatório Gerado com Sucesso! ✅")
+
+    with tab4:
+        st.subheader("🧠 Scouting de Bagres By Gugu (Powered by Gemini)")
+        p_select_ia = st.selectbox("Escolha o player para análise do Coach:", df['player'].unique())
+        p_data_ia = df[df['player'] == p_select_ia].iloc[0]
+
+        if st.button(f"Gerar Análise para {p_select_ia}"):
+             with st.spinner('O Coach está analisando os replays...'):
+                 analise = gerar_analise_ia(p_select_ia, p_data_ia)
+                 st.write(analise)
 
 else:
     st.warning("⚠️ Nenhuma fonte selecionada ou não foi possível carregar os CSVs do GitHub.")
