@@ -2,3 +2,6 @@ streamlit
 pandas
 plotly
 matplotlib
+undetected-chromedriver
+selenium
+setuptools

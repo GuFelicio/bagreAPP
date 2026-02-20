@@ -5,7 +5,7 @@ import sys
 from selenium.webdriver.common.by import By
 
 # --- CONFIGURAÇÃO DOS PARTICIPANTES ---
-# Lista oficial atualizada com os IDs que você mandou
+# Lista oficial mantida conforme o seu arquivo original
 PARTICIPANTES = [
     {"nome": "gfelicio", "id": "325002"},
     {"nome": "wEs", "id": "1718975"},
@@ -24,7 +24,7 @@ def iniciar_driver():
     options.add_argument('--disable-gpu')
     
     try:
-        # use_subprocess é o segredo para não travar no macOS
+        # use_subprocess é mantido para estabilidade no macOS
         driver = uc.Chrome(options=options, use_subprocess=True)
         return driver
     except Exception as e:
@@ -45,7 +45,7 @@ def extrair_dados_dashboard(driver, player):
     dados = {"player": nome, "id": player_id}
     
     try:
-        # Pega os blocos de estatísticas usando as classes que vimos no seu Inspecionar Elemento
+        # Busca os blocos de estatísticas
         items = driver.find_elements(By.CLASS_NAME, "StatsBoxPlayerInfoItem__Content")
         
         if not items:
@@ -54,9 +54,18 @@ def extrair_dados_dashboard(driver, player):
 
         for item in items:
             try:
-                # Mapeia KDR, ADR, Kills, etc.
-                label = item.find_element(By.CLASS_NAME, "StatsBoxPlayerInfoItem__name").text.lower().replace(" ", "_").replace("%", "_pct")
+                # Captura o nome original da métrica
+                label_raw = item.find_element(By.CLASS_NAME, "StatsBoxPlayerInfoItem__name").text.lower()
                 valor = item.find_element(By.CLASS_NAME, "StatsBoxPlayerInfoItem__value").text
+                
+                # --- ALTERAÇÃO NECESSÁRIA PARA O WINRATE ---
+                # Garante que variações como "Win Rate" ou "Vitórias" sejam salvas como "winrate" 
+                if "win rate" in label_raw or "vitória" in label_raw or "winrate" in label_raw:
+                    label = "winrate"
+                else:
+                    # Mantém a padronização original para as outras métricas
+                    label = label_raw.replace(" ", "_").replace("%", "_pct")
+                
                 dados[label] = valor
             except:
                 continue
@@ -87,13 +96,13 @@ if __name__ == "__main__":
 
     if todos_os_stats:
         df = pd.DataFrame(todos_os_stats)
+        # Gera o CSV que alimenta o seu App principal
         df.to_csv("ranking_bagre_do_mes.csv", index=False, encoding="utf-8-sig")
         
         print(f"\n✨ SUCESSO, GUSTAVO!")
         print(f"📂 Arquivo gerado: ranking_bagre_do_mes.csv")
         print("-" * 60)
         
-        # Ordena pelo KDR (menor KDR é o Bagre)
         if 'kdr' in df.columns:
             df['kdr_n'] = pd.to_numeric(df['kdr'], errors='coerce')
             print("🏆 QUEM É O BAGRE? (Ordenado por KDR):")

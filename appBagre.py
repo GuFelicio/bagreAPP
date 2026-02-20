@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import re
+import numpy as np
 
 st.set_page_config(page_title="App Bagre do Mês", layout="wide", page_icon="🐟")
 
@@ -15,39 +16,54 @@ st.markdown("""
 st.title("🏆 App Bagre do Mês - Paraguaio")
 st.markdown("Analise de performance entre GC e MM com pesos científicos de bagre.")
 
-URL_GC = "https://raw.githubusercontent.com/GuFelicio/bagreAPP/refs/heads/main/ranking_bagre_do_mes.csv"
-URL_MM = "https://raw.githubusercontent.com/GuFelicio/bagreAPP/refs/heads/main/ranking_mm_bagre.csv"
+URL_GC = "ranking_bagre_do_mes.csv"
+URL_MM = "ranking_mm_bagre.csv"
 
 def clean_val(val):
+    # Retorna NaN para valores vazios ou N/D para não estragar a média
     if pd.isna(val) or val == 'N/D' or val == '':
-        return 0.0
+        return np.nan
     if isinstance(val, str):
+        # Captura números em formatos como 1.20, 1,20 ou 01.05
         match = re.search(r"(\d+[.,]\d+|\d+)", val.split('\n')[0])
         if match:
             return float(match.group(1).replace(',', '.'))
-    return float(val) if isinstance(val, (int, float)) else 0.0
+    return float(val) if isinstance(val, (int, float)) else np.nan
 
 def get_stats_mm(text, pattern):
+    # Procura o número após KILLS ou DEATHS no bloco de texto
     m = re.search(pattern, str(text))
-    return int(m.group(1)) if m else 0
+    return int(m.group(1)) if m else np.nan
 
 def process_df(df, source_type):
     df.columns = [c.lower().strip() for c in df.columns]
     res = pd.DataFrame()
     res['player'] = df['player']
 
-    res['adr'] = df.get('adr', pd.Series([0]*len(df))).apply(clean_val)
-    res['hs'] = df.get('hs_pct', pd.Series([0]*len(df))).apply(clean_val)
-    res['rating'] = df.get('rating', pd.Series([0]*len(df))).apply(clean_val)
-    res['winrate'] = df.get('winrate', pd.Series([0]*len(df))).apply(clean_val)
-    res['fk'] = df.get('first_kills', pd.Series([0]*len(df))).apply(clean_val)
+    # Captura métricas básicas usando NaN como padrão para campos ausentes
+    res['adr'] = df.get('adr', pd.Series([np.nan]*len(df))).apply(clean_val)
+    res['hs'] = df.get('hs_pct', pd.Series([np.nan]*len(df))).apply(clean_val)
+    res['rating'] = df.get('rating', pd.Series([np.nan]*len(df))).apply(clean_val)
+    res['winrate'] = df.get('winrate', pd.Series([np.nan]*len(df))).apply(clean_val)
+    res['fk'] = df.get('first_kills', pd.Series([np.nan]*len(df))).apply(clean_val)
 
     if source_type == "MM":
-        df['k'] = df['hs_pct'].apply(lambda x: get_stats_mm(x, r"KILLS\n(\d+)"))
-        df['d'] = df['hs_pct'].apply(lambda x: get_stats_mm(x, r"DEATHS\n(\d+)"))
-        res['kdr'] = (df['k'] / df['d']).fillna(0).round(2)
+        # No MM, o KD costuma vir dentro do bloco de texto da coluna hs_pct
+        if 'hs_pct' in df.columns:
+            k = df['hs_pct'].apply(lambda x: get_stats_mm(x, r"KILLS\s*[\n\s]*(\d+)"))
+            d = df['hs_pct'].apply(lambda x: get_stats_mm(x, r"DEATHS\s*[\n\s]*(\d+)"))
+            # Cálculo de KD seguro (evita divisão por zero e mantém NaN se não houver dados)
+            res['kdr'] = (k / d.replace(0, 1)).round(2)
+        else:
+            res['kdr'] = np.nan
+            
+        # Tenta usar a coluna 'kdr' como fallback se o cálculo falhar
+        if 'kdr' in df.columns:
+            fallback = df['kdr'].apply(clean_val)
+            res['kdr'] = res['kdr'].fillna(fallback)
     else:
-        res['kdr'] = df.get('kdr', pd.Series([0]*len(df))).apply(clean_val)
+        # Na GC, o KD já vem em coluna própria
+        res['kdr'] = df.get('kdr', pd.Series([np.nan]*len(df))).apply(clean_val)
 
     return res
 
@@ -88,19 +104,23 @@ if errors:
         st.sidebar.error(err)
 
 if len(data_list) > 0:
+    # Agrupa e tira a média (O Pandas ignora os NaNs, mantendo o valor real de quem tem dado)
     df = pd.concat(data_list).groupby('player').mean(numeric_only=True).reset_index()
+    
+    # Após a média correta, preenchemos o que restou de vazio com 0 para o Score Final
+    df_calc = df.fillna(0)
 
     def norm(s):
         return (s - s.min()) / (s.max() - s.min()) if (s.max() - s.min()) != 0 else 0
 
     pesos = {'kdr': 0.30, 'adr': 0.25, 'rating': 0.20, 'hs': 0.10, 'fk': 0.10, 'winrate': 0.05}
 
-    score_final = pd.Series([0.0] * len(df))
+    score_final = pd.Series([0.0] * len(df_calc))
     peso_total_efetivo = 0
 
     for metric, weight in pesos.items():
-        if metric in df.columns and df[metric].sum() > 0:
-            score_final += norm(df[metric]) * weight
+        if metric in df_calc.columns and df_calc[metric].sum() > 0:
+            score_final += norm(df_calc[metric]) * weight
             peso_total_efetivo += weight
 
     df['score'] = (score_final / peso_total_efetivo) * 100 if peso_total_efetivo > 0 else 0
@@ -120,10 +140,12 @@ if len(data_list) > 0:
             st.metric("Pontuação de MVP", f"{df.iloc[-1]['score']:.1f}")
 
         st.markdown("### Ranking Geral")
+        # Formatação para mostrar N/D visualmente se o dado for 0 ou NaN
+        display_df = df[['player', 'score', 'rating', 'kdr', 'adr', 'hs']].copy()
         try:
-            st.dataframe(df[['player', 'score', 'rating', 'kdr', 'adr', 'hs']].style.background_gradient(cmap='RdYlGn'), use_container_width=True)
+            st.dataframe(display_df.style.background_gradient(cmap='RdYlGn', subset=['score', 'rating', 'kdr', 'adr', 'hs']), use_container_width=True)
         except Exception:
-            st.dataframe(df[['player', 'score', 'rating', 'kdr', 'adr', 'hs']], use_container_width=True)
+            st.dataframe(display_df, use_container_width=True)
 
         st.markdown("### Gráficos Comparativos")
         m_escolhida = st.selectbox("Selecione a Métrica:", ["score", "rating", "kdr", "adr", "hs", "winrate"])
@@ -136,10 +158,10 @@ if len(data_list) > 0:
         p_data = df[df['player'] == p_select].iloc[0]
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Rating (MM)", f"{p_data['rating']:.2f}" if p_data['rating'] > 0 else "N/A")
-        c2.metric("KDR", f"{p_data['kdr']:.2f}")
-        c3.metric("ADR", f"{p_data['adr']:.1f}")
-        c4.metric("HS%", f"{p_data['hs']:.1f}%")
+        c1.metric("Rating", f"{p_data['rating']:.2f}" if p_data['rating'] > 0 else "N/D")
+        c2.metric("KDR", f"{p_data['kdr']:.2f}" if p_data['kdr'] > 0 else "N/D")
+        c3.metric("ADR", f"{p_data['adr']:.1f}" if p_data['adr'] > 0 else "N/D")
+        c4.metric("HS%", f"{p_data['hs']:.1f}%" if p_data['hs'] > 0 else "N/D")
 
         st.info(f"O player {p_select} está com score de **{p_data['score']:.1f}** no ranking geral.")
 
@@ -174,4 +196,4 @@ if len(data_list) > 0:
         st.button("Relatório Gerado com Sucesso! ✅")
 
 else:
-    st.warning("⚠️ Nenhuma fonte selecionada ou não foi possível carregar os CSVs do GitHub. Marque MM/GC na sidebar e tente recarregar.")
+    st.warning("⚠️ Nenhuma fonte selecionada ou não foi possível carregar os CSVs do GitHub.")
