@@ -184,7 +184,7 @@ if len(data_list) > 0:
             with st.spinner('O Coach está analisando...'):
                 st.write(gerar_analise_ia(p_select_ia, df[df['player'] == p_select_ia].iloc[0]))
 
-    with tab5:
+    with tabs[5]:
 
         st.subheader("🆚 Duelo de Bagres: Comparativo Lado a Lado")
 
