@@ -184,7 +184,7 @@ if len(data_list) > 0:
             with st.spinner('O Coach está analisando...'):
                 st.write(gerar_analise_ia(p_select_ia, df[df['player'] == p_select_ia].iloc[0]))
 
-    with tabs[5]:
+    with tabs[4]:
 
         st.subheader("🆚 Duelo de Bagres: Comparativo Lado a Lado")
 
@@ -335,37 +335,6 @@ if len(data_list) > 0:
                     except Exception as e:
 
                         st.error(f"O Coach se recusou a opinar: {e}")
-
-    with tabs[5]: # TAB 6: Estou + ou - Bagre?
-        st.subheader("📈 Análise de Evolução Temporal")
-        try:
-            # Carrega e processa o histórico
-            h_gc = process_df(load_csv(HIST_GC), "GC")
-            h_mm = process_df(load_csv(HIST_MM), "MM")
-            df_h = pd.concat([h_gc, h_mm]).groupby(['player', 'mes']).mean(numeric_only=True).reset_index()
-            
-            p_evol = st.selectbox("Selecione seu nick:", df_h['player'].unique())
-            df_p_h = df_h[df_h['player'] == p_evol].sort_values('mes')
-            
-            if len(df_p_h) < 2:
-                st.info("💡 Você precisa de dados de pelo menos 2 meses no histórico para ver a evolução.")
-            else:
-                st.plotly_chart(px.line(df_p_h, x='mes', y='kdr', title=f"Evolução de KDR - {p_evol}", markers=True), use_container_width=True)
-                
-                atual, passado = df_p_h.iloc[-1], df_p_h.iloc[-2]
-                c1, c2, c3 = st.columns(3)
-                c1.metric("KDR Atual", f"{atual['kdr']:.2f}", f"{atual['kdr'] - passado['kdr']:.2f}")
-                c2.metric("ADR Atual", f"{atual['adr']:.1f}", f"{atual['adr'] - passado['adr']:.1f}")
-                c3.metric("HS% Atual", f"{atual['hs']:.1f}%", f"{atual['hs'] - passado['hs']:.1f}%")
-                
-                if st.button("Coach, estou melhorando?"):
-                    stats_ia = {
-                        "atual_adr": atual['adr'], "atual_kdr": atual['kdr'],
-                        "passado_adr": passado['adr'], "passado_kdr": passado['kdr']
-                    }
-                    st.success(gerar_analise_ia(p_evol, stats_ia, contexto="evolucao"))
-        except:
-            st.warning("⚠️ Arquivos de histórico não encontrados. Rode os scrapers novos para gerá-los!")
 
     with tabs[5]: 
         st.subheader("📈 + ou - Bagre?")
