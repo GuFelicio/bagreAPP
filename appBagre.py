@@ -166,7 +166,7 @@ if len(data_list) > 0:
     df['score'] = (score_final / peso_total_efetivo) * 100 if peso_total_efetivo > 0 else 0
     df = df.sort_values('score', ascending=True).reset_index(drop=True)
 
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Dashboard de Performance", "🔍 Estatísticas por Player", "📝 Relatório de Zoeira", "🧠 AI Scouting"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Dashboard de Performance", "🔍 Estatísticas por Player", "📝 Relatório de Zoeira", "🧠 AI Scouting", "🆚 Comparativo 1x1"])
 
     with tab1:
         col_bagre, col_mvp = st.columns(2)
@@ -244,6 +244,83 @@ if len(data_list) > 0:
              with st.spinner('O Coach está analisando os replays...'):
                  analise = gerar_analise_ia(p_select_ia, p_data_ia)
                  st.write(analise)
+
+    with tab5:
+        st.subheader("🆚 Duelo de Bagres: Comparativo Lado a Lado")
+        st.markdown("Selecione dois jogadores para ver quem está carregando e quem está pinando.")
+
+        # Seleção dos jogadores
+        col_sel1, col_sel2 = st.columns(2)
+        with col_sel1:
+            p1 = st.selectbox("Primeiro Player:", df['player'].unique(), index=0, key="comp_p1")
+        with col_sel2:
+            p2 = st.selectbox("Segundo Player:", df['player'].unique(), index=1, key="comp_p2")
+
+        if p1 == p2:
+            st.warning("⚠️ Selecione jogadores diferentes para uma comparação justa!")
+        else:
+            # Filtra os dados dos dois selecionados
+            d1 = df[df['player'] == p1].iloc[0]
+            d2 = df[df['player'] == p2].iloc[0]
+
+            # --- PARTE 1: MÉTRICAS EM DESTAQUE ---
+            st.markdown(f"### {p1} vs {p2}")
+            m1, m2, m3, m4 = st.columns(4)
+            
+            # Função auxiliar para mostrar quem vence na métrica
+            def delta_label(v1, v2, invert=False):
+                diff = v1 - v2
+                # Se invert for True (tipo Score de Bagre), menor valor é melhor
+                is_p1_better = (diff < 0) if invert else (diff > 0)
+                return f"{v1:.2f} vs {v2:.2f}", "normal" if diff == 0 else ("inverse" if is_p1_better else "normal")
+
+            m1.metric("Rating", f"{d1['rating']:.2f}", f"vs {d2['rating']:.2f}", delta_color="normal" if d1['rating'] >= d2['rating'] else "inverse")
+            m2.metric("KDR", f"{d1['kdr']:.2f}", f"vs {d2['kdr']:.2f}", delta_color="normal" if d1['kdr'] >= d2['kdr'] else "inverse")
+            m3.metric("ADR", f"{d1['adr']:.1f}", f"vs {d2['adr']:.1f}", delta_color="normal" if d1['adr'] >= d2['adr'] else "inverse")
+            m4.metric("Score de Bagre", f"{d1['score']:.1f}", f"vs {d2['score']:.1f} (Menor é melhor)", delta_color="inverse" if d1['score'] <= d2['score'] else "normal")
+
+            # --- PARTE 2: GRÁFICO DE BARRAS AGRUPADAS ---
+            metrics_list = ['rating', 'kdr', 'adr', 'hs', 'winrate']
+            
+            # Prepara os dados para o Plotly (formato longo)
+            comp_data = []
+            for m in metrics_list:
+                comp_data.append({"Métrica": m.upper(), "Valor": d1[m], "Player": p1})
+                comp_data.append({"Métrica": m.upper(), "Valor": d2[m], "Player": p2})
+            
+            df_comp_chart = pd.DataFrame(comp_data)
+
+            fig_duel = px.bar(
+                df_comp_chart, 
+                x="Métrica", 
+                y="Valor", 
+                color="Player",
+                barmode="group",
+                text_auto='.2f',
+                title=f"Análise Técnica: {p1} vs {p2}",
+                color_discrete_sequence=['#00CC96', '#EF553B'] # Verde para Player 1, Vermelho para Player 2 (ou vice-versa)
+            )
+            
+            fig_duel.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color="white")
+            st.plotly_chart(fig_duel, use_container_width=True)
+
+            # --- PARTE 3: VEREDITO DA IA ---
+            if st.button(f"Pedir veredito do Coach sobre este duelo"):
+                with st.spinner('O Coach está analisando a treta...'):
+                    prompt_duelo = f"""
+                    Você é um Coach de CS2 zoeiro. Compare esses dois jogadores:
+                    Jogador 1 ({p1}): ADR {d1['adr']:.1f}, KDR {d1['kdr']:.2f}, Score {d1['score']:.1f}
+                    Jogador 2 ({p2}): ADR {d2['adr']:.1f}, KDR {d2['kdr']:.2f}, Score {d2['score']:.1f}
+                    
+                    Diga quem está carregando quem e faça uma piada com o perdedor do duelo. 
+                    Use gírias de CS e seja curto e grosso.
+                    """
+                    try:
+                        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+                        response = model.generate_content(prompt_duelo)
+                        st.info(response.text)
+                    except Exception as e:
+                        st.error(f"O Coach se recusou a opinar: {e}")
 
 else:
     st.warning("⚠️ Nenhuma fonte selecionada ou não foi possível carregar os CSVs do GitHub.")
