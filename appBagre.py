@@ -4,6 +4,8 @@ import plotly.express as px
 import re
 import numpy as np
 import google.generativeai as genai
+import os
+os.environ["GOOGLE_API_USE_MTLS_ENDPOINT"] = "never"
 
 
 st.set_page_config(page_title="App Bagre do Mês", layout="wide", page_icon="🐟")
@@ -30,7 +32,7 @@ except Exception:
 def gerar_analise_ia(player_nome, stats):
     try:
         # Usando a versão estável com cota garantida no plano gratuito
-        model = genai.GenerativeModel('gemini-1.5-flash') 
+        model = genai.GenerativeModel('gemini-1.5-flash-latest') 
         
         prompt = f"""
         Você é um Coach profissional de CS2, conhecido por ser técnico mas muito zoeiro. Você pode pesquisar bastante sobre CS2 e 
