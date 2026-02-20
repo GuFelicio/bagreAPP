@@ -23,7 +23,7 @@ st.markdown("Analise de performance entre GC e MM com pesos científicos de bagr
 URL_GC = "ranking_bagre_do_mes.csv"
 URL_MM = "ranking_mm_bagre.csv"
 
-# Configure sua chave (o ideal é usar st.secrets para segurança)
+
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 except Exception:
@@ -32,7 +32,7 @@ except Exception:
 def gerar_analise_ia(player_nome, stats):
     try:
         # Usando a versão estável com cota garantida no plano gratuito
-        model = genai.GenerativeModel('gemini-1.5-flash-latest') 
+        model = genai.GenerativeModel('gemini-2.5-pro') 
         
         prompt = f"""
         Você é um Coach profissional de CS2, conhecido por ser técnico mas muito zoeiro. Você pode pesquisar bastante sobre CS2 e 
