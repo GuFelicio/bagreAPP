@@ -16,6 +16,7 @@ PARTICIPANTES = [
     {"nome": "Anjoz", "id": "2153414"},
     {"nome": "TioZo", "id": "515855"},
     {"nome": "MARMOT", "id": "1116597"},
+    {"nome": "Cadeirafps", "id": "2134572"}
 ]
 
 def iniciar_driver():
