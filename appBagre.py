@@ -37,7 +37,7 @@ except Exception:
 def gerar_analise_ia(player_nome, stats, contexto="mensal"):
     try:
 
-        model = genai.GenerativeModel('gemini-2.5-pro') 
+        model = genai.GenerativeModel('gemini-1.5-flash-latest') 
         
         if contexto == "mensal":
             prompt = f"""
@@ -60,7 +60,7 @@ def gerar_analise_ia(player_nome, stats, contexto="mensal"):
         return response.text
     except Exception as e:
         try:
-            model = genai.GenerativeModel('gemini-2.5-pro')
+            model = genai.GenerativeModel('gemini-1.5-flash-latest')
             response = model.generate_content(prompt)
             return response.text
         except:
@@ -68,7 +68,7 @@ def gerar_analise_ia(player_nome, stats, contexto="mensal"):
 
 def gerar_relatorio_zap_ia(df_geral, df_gc, df_mm):
     try:
-        model = genai.GenerativeModel('gemini-2.5-pro')
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
         
         resumo_geral = df_geral[['player', 'score']].to_string(index=False)
         
