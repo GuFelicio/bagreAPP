@@ -66,6 +66,42 @@ def gerar_analise_ia(player_nome, stats, contexto="mensal"):
         except:
             return f"⚠️ O Coach teve um piripaque técnico: {str(e)}"
 
+def gerar_relatorio_zap_ia(df_geral, df_gc, df_mm):
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        
+        resumo_geral = df_geral[['player', 'score']].to_string(index=False)
+        
+        top_gc = df_gc.sort_values('rating', ascending=False).head(3)[['player', 'rating']].to_string(index=False)
+        top_mm = df_mm.sort_values('rating', ascending=False).head(3)[['player', 'rating']].to_string(index=False)
+
+        prompt = f"""
+        Você é um Coach de CS2 zoeiro de Caçapava-SP. Sua missão é criar o "RELATÓRIO OFICIAL DO BAGRE" para postar no WhatsApp.
+        
+        DADOS DO MÊS:
+        --- RANKING GERAL (Peso de Bagre) ---
+        {resumo_geral}
+        
+        --- TOP 3 GAMERS CLUB (Pelo Rating) ---
+        {top_gc}
+        
+        --- TOP 3 MATCHMAKING (Pela Rating) ---
+        {top_mm}
+
+        ESTRUTURA DO TEXTO:
+        1. Use emojis (🐟, 🏆, 💀, 🎯).
+        2. Liste as posições principais de forma organizada.
+        3. Faça um comentário ácido e engraçado sobre o último colocado (O Bagre).
+        4. Elogie o primeiro colocado (O MVP) mas diga que ele "carregou um bando de pino".
+        5. Use gírias de CS e de Caçapava.
+        6. Formate com negritos (*) para o WhatsApp.
+        """
+        
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"Erro ao gerar relatório: {e}"
+
 def clean_val(val):
     if pd.isna(val) or val == 'N/D' or val == '':
         return np.nan
@@ -131,8 +167,11 @@ if len(data_list) > 0:
     df = pd.concat(data_list).groupby('player').mean(numeric_only=True).reset_index()
     df_calc = df.fillna(0)
 
-    def norm(s):
-        return (s - s.min()) / (s.max() - s.min()) if (s.max() - s.min()) != 0 else 0
+    def norm(s, piso=0.2): # Piso de 40% da nota garantido
+        diff = s.max() - s.min()
+        if diff == 0:
+            return 1.0 
+        return piso + (1.0 - piso) * (s - s.min()) / diff
 
     pesos = {'kdr': 0.30, 'adr': 0.25, 'rating': 0.20, 'hs': 0.10, 'fk': 0.10, 'winrate': 0.05}
     score_final = pd.Series([0.0] * len(df_calc))
@@ -172,11 +211,21 @@ if len(data_list) > 0:
         c4.metric("HS%", f"{p_data['hs']:.1f}%")
 
     with tabs[2]: # WhatsApp
-        bagre, mvp = df.iloc[0]['player'], df.iloc[-1]['player']
-        relatorio = f"*🐟 RELATÓRIO: BAGRE DO MÊS* 🐟\n\n🏆 *BAGRE:* {bagre.upper()}\n⭐ *MVP:* {mvp.upper()}\n\n*Ranking:*\n"
-        for i, row in df.sort_values('score', ascending=False).reset_index().iterrows():
-            relatorio += f"{i+1}. {row['player']} - {row['score']:.1f} pts\n"
-        st.text_area("Copie para o Zap:", relatorio, height=250)
+        st.subheader("📢 Gerador de Relatório IA para WhatsApp")
+        st.markdown("Clique no botão para o Coach de Caçapava gerar o texto da resenha.")
+
+        if st.button("🚀 Gerar Relatório com IA"):
+            with st.spinner('O Coach está escrevendo o boletim...'):
+
+                df_gc_orig = process_df(load_csv(URL_GC), "GC") if use_gc else df
+                df_mm_orig = process_df(load_csv(URL_MM), "MM") if use_mm else df
+                
+                relatorio_ia = gerar_relatorio_zap_ia(df, df_gc_orig, df_mm_orig)
+                st.session_state['relatorio_zap'] = relatorio_ia
+
+        if 'relatorio_zap' in st.session_state:
+            st.text_area("Copie o texto abaixo:", st.session_state['relatorio_zap'], height=400)
+            st.button("Relatório Copiado! ✅")
 
     with tabs[3]: # AI Scouting
         p_select_ia = st.selectbox("Análise do Coach:", df['player'].unique(), key="ia_mensal")

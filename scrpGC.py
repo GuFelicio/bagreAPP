@@ -16,7 +16,6 @@ PARTICIPANTES = [
     {"nome": "Anjoz", "id": "2153414"},
     {"nome": "TioZo", "id": "515855"},
     {"nome": "MARMOT", "id": "1116597"},
-    {"nome": "Cadeirafps", "id": "2134572"}
 ]
 
 def iniciar_driver():
@@ -26,7 +25,7 @@ def iniciar_driver():
     options.add_argument('--disable-gpu')
     
     try:
-        driver = uc.Chrome(options=options, use_subprocess=True)
+        driver = uc.Chrome(version_main=145, options=options, use_subprocess=True)
         return driver
     except Exception as e:
         print(f"\n❌ ERRO CRÍTICO: {e}")
