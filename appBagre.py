@@ -6,7 +6,7 @@ import numpy as np
 import google.generativeai as genai
 import os
 
-# Configuração de estabilidade para a API
+
 os.environ["GOOGLE_API_USE_MTLS_ENDPOINT"] = "never"
 
 st.set_page_config(page_title="App Bagre do Mês", layout="wide", page_icon="🐟")
@@ -21,11 +21,11 @@ st.markdown("""
 st.title("🏆 App Bagre do Mês - Bagres FC")
 st.markdown("Analise de performance entre GC e MM com pesos científicos de los bagre.")
 
-# Arquivos Atuais
+
 URL_GC = "ranking_bagre_do_mes.csv"
 URL_MM = "ranking_mm_bagre.csv"
 
-# Arquivos Históricos (Novos)
+
 HIST_GC = "historico_gc_geral.csv"
 HIST_MM = "historico_mm_geral.csv"
 
@@ -36,7 +36,7 @@ except Exception:
 
 def gerar_analise_ia(player_nome, stats, contexto="mensal"):
     try:
-        # Tenta usar o modelo que você definiu
+
         model = genai.GenerativeModel('gemini-2.5-pro') 
         
         if contexto == "mensal":
@@ -48,7 +48,7 @@ def gerar_analise_ia(player_nome, stats, contexto="mensal"):
             Use gírias de CS (pinador, carregador, baixa o braço, rusha B, bagre) e seja engraçado.
             """
         else:
-            # Prompt específico para a Tab 6 (Evolução)
+           
             prompt = f"""
             Você é um Coach de CS2 de Caçapava. Analise a evolução de {player_nome}:
             Dados Atuais: ADR {stats['atual_adr']:.1f}, KDR {stats['atual_kdr']:.2f}
@@ -60,7 +60,7 @@ def gerar_analise_ia(player_nome, stats, contexto="mensal"):
         return response.text
     except Exception as e:
         try:
-            model = genai.GenerativeModel('gemini-1.5-flash-latest')
+            model = genai.GenerativeModel('gemini-2.5-pro')
             response = model.generate_content(prompt)
             return response.text
         except:
@@ -68,7 +68,7 @@ def gerar_analise_ia(player_nome, stats, contexto="mensal"):
 
 def gerar_relatorio_zap_ia(df_geral, df_gc, df_mm):
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        model = genai.GenerativeModel('gemini-2.5-pro')
         
         resumo_geral = df_geral[['player', 'score']].to_string(index=False)
         
@@ -119,7 +119,6 @@ def process_df(df, source_type):
     df.columns = [c.lower().strip() for c in df.columns]
     res = pd.DataFrame()
     res['player'] = df['player']
-    # Mantém a coluna de mês se ela existir no CSV
     if 'mes' in df.columns:
         res['mes'] = df['mes']
 
