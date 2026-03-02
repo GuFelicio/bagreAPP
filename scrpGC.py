@@ -16,6 +16,7 @@ PARTICIPANTES = [
     {"nome": "Anjoz", "id": "2153414"},
     {"nome": "TioZo", "id": "515855"},
     {"nome": "MARMOT", "id": "1116597"},
+    {"nome": "Baludinho", "id": "1571977"},
 ]
 
 def iniciar_driver():
@@ -41,43 +42,43 @@ def extrair_dados_dashboard(driver, player):
     print(f"📍 Aguardando você carregar o dashboard de {nome}...")
     input(f"👉 Escolha o mês no navegador e, quando os números aparecerem, aperte ENTER aqui...")
 
-    dados = {"player": nome, "id": player_id}
+    # Forçamos a criação da coluna 'partidas' aqui com um valor padrão (N/D)
+    dados = {"player": nome, "id": player_id, "partidas": "N/D"} 
     
     try:
         items = driver.find_elements(By.CLASS_NAME, "StatsBoxPlayerInfoItem__Content")
         
         if not items:
-            print(f"⚠️ Dados não encontrados para {nome}. A página está logada?")
-            return None
+            print(f"⚠️ Dados não encontrados para {nome}.")
+            return dados # Retorna pelo menos o nome e a coluna de partidas vazia
 
         for item in items:
             try:
                 label_raw = item.find_element(By.CLASS_NAME, "StatsBoxPlayerInfoItem__name").text.lower()
                 valor = item.find_element(By.CLASS_NAME, "StatsBoxPlayerInfoItem__value").text
                 
-                # Normalização do WinRate
                 if any(x in label_raw for x in ["win rate", "vitória", "winrate"]):
-                    label = "winrate"
+                    dados["winrate"] = valor
+                elif any(x in label_raw for x in ["partidas", "matches", "jogos"]):
+                    dados["partidas"] = valor # Se achar o valor real, ele substitui o "N/D"
                 else:
                     label = label_raw.replace(" ", "_").replace("%", "_pct")
-                
-                dados[label] = valor
+                    dados[label] = valor
             except:
                 continue
         
-        print(f"✅ {nome} processado!")
         return dados
     except Exception as e:
         print(f"❌ Erro em {nome}: {e}")
-        return None
-
+        return dados # Mesmo com erro, retorna o que tem para não quebrar o CSV
+    
 if __name__ == "__main__":
     driver = iniciar_driver()
     todos_os_stats = []
 
     try:
         print("\n🔑 PASSO 1: Faça login no Chrome que abriu.")
-        input("✅ Após logar, pressione ENTER aqui para iniciar a rodada com os 8 amigos...")
+        input("✅ Após logar, pressione ENTER aqui para iniciar a rodada com os participantes...")
 
         for p in PARTICIPANTES:
             resultado = extrair_dados_dashboard(driver, p)
@@ -117,9 +118,10 @@ if __name__ == "__main__":
         print(f"📈 Arquivo Histórico: {ARQUIVO_HIST}")
         print("-" * 60)
         
+        # Preview do Ranking
         if 'kdr' in df_novo.columns:
             df_novo['kdr_n'] = pd.to_numeric(df_novo['kdr'].str.replace(',', '.'), errors='coerce')
-            print("🏆 QUEM É O BAGRE DO MÊS? (Ordenado por KDR):")
-            print(df_novo.sort_values(by='kdr_n')[['player', 'kdr', 'adr']].to_string(index=False))
+            print("🏆 PREVIEW DO RANKING (Ordenado por KDR):")
+            print(df_novo.sort_values(by='kdr_n')[['player', 'kdr', 'partidas']].to_string(index=False))
     else:
         print("\n🛑 Erro: Nenhum dado coletado.")

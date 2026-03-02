@@ -129,18 +129,26 @@ def process_df(df, source_type):
     res['fk'] = df.get('first_kills', pd.Series([np.nan]*len(df))).apply(clean_val)
 
     if source_type == "MM":
-        if 'hs_pct' in df.columns:
-            k = df['hs_pct'].apply(lambda x: get_stats_mm(x, r"KILLS\s*[\n\s]*(\d+)"))
-            d = df['hs_pct'].apply(lambda x: get_stats_mm(x, r"DEATHS\s*[\n\s]*(\d+)"))
-            res['kdr'] = (k / d.replace(0, 1)).round(2)
-        else:
-            res['kdr'] = np.nan
-        if 'kdr' in df.columns:
-            fallback = df['kdr'].apply(clean_val)
-            res['kdr'] = res['kdr'].fillna(fallback)
+        # Extrai o número de partidas do campo winrate (ex: "PLAYED\n27")
+        res['partidas'] = df.get('winrate', pd.Series(['0']*len(df))).apply(
+            lambda x: int(re.search(r"PLAYED\s*[\n\s]*(\d+)", str(x)).group(1)) if re.search(r"PLAYED\s*[\n\s]*(\d+)", str(x)) else 1
+        )
     else:
-        res['kdr'] = df.get('kdr', pd.Series([np.nan]*len(df))).apply(clean_val)
+        res['partidas'] = df.get('partidas', pd.Series([15]*len(df))).apply(clean_val)
+    
     return res
+
+def norm_piso(s, piso=0.4):
+    diff = s.max() - s.min()
+    if diff == 0: return 1.0
+    return piso + (1.0 - piso) * (s - s.min()) / diff
+
+
+def get_fator_volume(jogos, media_grupo):
+    pct = jogos / media_grupo
+    if pct >= 0.75: return 1.0   # Tier Ouro: Jogou +75% da média
+    if pct >= 0.40: return 0.90  # Tier Prata: Jogou entre 40-75%
+    return 0.80                  # Tier Bronze: Jogou -40% (Penalidade máxima de 20%)
 
 @st.cache_data(show_spinner=False)
 def load_csv(url: str) -> pd.DataFrame:
@@ -163,25 +171,27 @@ if use_gc:
     except: st.sidebar.warning("Arquivo GC não encontrado.")
 
 if len(data_list) > 0:
-    df = pd.concat(data_list).groupby('player').mean(numeric_only=True).reset_index()
+    df = pd.concat(data_list).groupby('player').agg({
+        'adr': 'mean', 'hs': 'mean', 'rating': 'mean', 
+        'winrate': 'mean', 'fk': 'mean', 'kdr': 'mean', 'partidas': 'sum'
+    }).reset_index()
+    
     df_calc = df.fillna(0)
-
-    def norm(s, piso=0.2): # Piso de 40% da nota garantido
-        diff = s.max() - s.min()
-        if diff == 0:
-            return 1.0 
-        return piso + (1.0 - piso) * (s - s.min()) / diff
-
+    
     pesos = {'kdr': 0.30, 'adr': 0.25, 'rating': 0.20, 'hs': 0.10, 'fk': 0.10, 'winrate': 0.05}
-    score_final = pd.Series([0.0] * len(df_calc))
-    peso_total_efetivo = 0
+    
 
+    score_base = pd.Series([0.0] * len(df_calc))
     for metric, weight in pesos.items():
         if metric in df_calc.columns and df_calc[metric].sum() > 0:
-            score_final += norm(df_calc[metric]) * weight
-            peso_total_efetivo += weight
+            score_base += norm_piso(df_calc[metric]) * weight
 
-    df['score'] = (score_final / peso_total_efetivo) * 100 if peso_total_efetivo > 0 else 0
+ 
+    media_jogos_grupo = df['partidas'].mean()
+    df['fator_volume'] = df['partidas'].apply(lambda x: get_fator_volume(x, media_jogos_grupo))
+    
+    df['score'] = (score_base * 100) * df['fator_volume']
+    
     df = df.sort_values('score', ascending=True).reset_index(drop=True)
 
     # --- TABS ---
@@ -196,18 +206,43 @@ if len(data_list) > 0:
             st.success(f"⭐ **MVP DA GALERA:** {df.iloc[-1]['player'].upper()}")
             st.metric("Pontuação de MVP", f"{df.iloc[-1]['score']:.1f}")
         
-        st.dataframe(df[['player', 'score', 'rating', 'kdr', 'adr', 'hs']].style.background_gradient(cmap='RdYlGn'), use_container_width=True)
-        m_escolhida = st.selectbox("Selecione a Métrica:", ["score", "rating", "kdr", "adr", "hs", "winrate"])
-        st.plotly_chart(px.bar(df, x='player', y=m_escolhida, color=m_escolhida, color_continuous_scale='RdYlGn'), use_container_width=True)
+        # Adicionado 'partidas' e 'fator_volume' na visualização da tabela
+        st.dataframe(
+            df[['player', 'score', 'partidas', 'rating', 'kdr', 'adr', 'hs']]
+            .style.background_gradient(cmap='RdYlGn', subset=['score', 'rating', 'kdr', 'adr', 'hs']), 
+            use_container_width=True
+        )
+
+        st.markdown("### 📊 Participação e Performance")
+        col_graf1, col_graf2 = st.columns(2)
+        
+        with col_graf1:
+            m_escolhida = st.selectbox("Selecione a Métrica:", ["score", "rating", "kdr", "adr", "hs", "winrate"])
+            st.plotly_chart(px.bar(df, x='player', y=m_escolhida, color=m_escolhida, color_continuous_scale='RdYlGn'), use_container_width=True)
+        
+        with col_graf2:
+            # Novo gráfico de participação para ver quem está "sumido" do servidor
+            fig_vol = px.pie(df, values='partidas', names='player', title="Distribuição de Partidas (Volume)", hole=.3)
+            st.plotly_chart(fig_vol, use_container_width=True)
 
     with tabs[1]: # Player Stats
         p_select = st.selectbox("Selecione um player:", df['player'].unique())
         p_data = df[df['player'] == p_select].iloc[0]
-        c1, c2, c3, c4 = st.columns(4)
+        
+        # Adicionada a 5ª coluna para o Total de Partidas
+        c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric("Rating", f"{p_data['rating']:.2f}")
         c2.metric("KDR", f"{p_data['kdr']:.2f}")
         c3.metric("ADR", f"{p_data['adr']:.1f}")
         c4.metric("HS%", f"{p_data['hs']:.1f}%")
+        c5.metric("Total Jogos", int(p_data['partidas']))
+
+        # Feedback visual sobre a punição de volume
+        if p_data['fator_volume'] < 1.0:
+            perda = int((1 - p_data['fator_volume']) * 100)
+            st.warning(f"⚠️ **Aviso do VAR:** Este player teve o score reduzido em **{perda}%** por baixa participação. (Média do grupo: {media_jogos_grupo:.1f} jogos)")
+        else:
+            st.success(f"✅ **Participação Ouro:** Este player atingiu a meta de jogos do grupo. Score 100% preservado!")
 
     with tabs[2]: # WhatsApp
         st.subheader("📢 Gerador de Relatório IA para WhatsApp")
@@ -302,7 +337,7 @@ if len(data_list) > 0:
 
             # --- PARTE 2: GRÁFICO DE BARRAS AGRUPADAS ---
 
-            metrics_list = ['rating', 'kdr', 'adr', 'hs', 'winrate']
+            metrics_list = ['rating', 'kdr', 'adr', 'hs', 'winrate', 'partidas'] 
 
            
 
