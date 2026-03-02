@@ -128,6 +128,9 @@ def process_df(df, source_type):
     res['winrate'] = df.get('winrate', pd.Series([np.nan]*len(df))).apply(clean_val)
     res['fk'] = df.get('first_kills', pd.Series([np.nan]*len(df))).apply(clean_val)
 
+
+    res['kdr'] = df.get('kdr', pd.Series([np.nan]*len(df))).apply(clean_val)
+
     if source_type == "MM":
         # Extrai o número de partidas do campo winrate (ex: "PLAYED\n27")
         res['partidas'] = df.get('winrate', pd.Series(['0']*len(df))).apply(
