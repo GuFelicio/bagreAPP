@@ -133,14 +133,12 @@ def process_df(df, source_type):
 
     if source_type == "MM":
         # Extrai o número de partidas do campo winrate (ex: "PLAYED\n27")
-        def extrair_partidas_seguro(texto):
-            match = re.search(r"PLAYED\s*[\n\s]*(\d+)", str(texto))
-            if match:
-                return int(match.group(1))
-            return 0 # Se falhar, retorna 0 para não bugar a média
-
-        res['partidas'] = df['winrate'].apply(extrair_partidas_seguro)
-        
+        res['partidas'] = df.get('winrate', pd.Series(['0']*len(df))).apply(
+            lambda x: int(re.search(r"PLAYED\s*[\n\s]*(\d+)", str(x)).group(1)) if re.search(r"PLAYED\s*[\n\s]*(\d+)", str(x)) else 1
+        )
+    else:
+        res['partidas'] = df.get('partidas', pd.Series([15]*len(df))).apply(clean_val)
+    
     return res
 
 def norm_piso(s, piso=0.4):
