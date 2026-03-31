@@ -118,7 +118,10 @@ def get_stats_mm(text, pattern):
 def process_df(df, source_type):
     df.columns = [c.lower().strip() for c in df.columns]
     res = pd.DataFrame()
-    res['player'] = df['player']
+    
+    # Remove espaços em branco dos nomes para evitar o erro de "Baludinho "
+    res['player'] = df['player'].astype(str).str.strip()
+    
     if 'mes' in df.columns:
         res['mes'] = df['mes']
 
@@ -127,17 +130,19 @@ def process_df(df, source_type):
     res['rating'] = df.get('rating', pd.Series([np.nan]*len(df))).apply(clean_val)
     res['winrate'] = df.get('winrate', pd.Series([np.nan]*len(df))).apply(clean_val)
     res['fk'] = df.get('first_kills', pd.Series([np.nan]*len(df))).apply(clean_val)
-
-
     res['kdr'] = df.get('kdr', pd.Series([np.nan]*len(df))).apply(clean_val)
 
     if source_type == "MM":
-        # Extrai o número de partidas do campo winrate (ex: "PLAYED\n27")
-        res['partidas'] = df.get('winrate', pd.Series(['0']*len(df))).apply(
-            lambda x: int(re.search(r"PLAYED\s*[\n\s]*(\d+)", str(x)).group(1)) if re.search(r"PLAYED\s*[\n\s]*(\d+)", str(x)) else 1
-        )
+        def extrair_partidas_seguro(texto):
+            match = re.search(r"PLAYED\s*[\n\s]*(\d+)", str(texto))
+            if match:
+                return int(match.group(1))
+            return 0 # Se não achar no texto do MM, assume 0
+
+        res['partidas'] = df['winrate'].apply(extrair_partidas_seguro)
     else:
-        res['partidas'] = df.get('partidas', pd.Series([15]*len(df))).apply(clean_val)
+        # Se na GC estiver N/D ou Vazio, transformamos em 0 antes de somar
+        res['partidas'] = df.get('partidas', pd.Series([0]*len(df))).apply(clean_val).fillna(0)
     
     return res
 
