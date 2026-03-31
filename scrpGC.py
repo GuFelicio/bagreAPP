@@ -8,7 +8,7 @@ from selenium.webdriver.common.by import By
 
 # --- CONFIGURAÇÃO DOS PARTICIPANTES ---
 PARTICIPANTES = [
-    {"nome": "gfelicio", "id": "325002"},
+    {"nome": "gfelicio", "id": "3250002"},
     {"nome": "wEs", "id": "1718975"},
     {"nome": "BioAlarcon", "id": "1823210"},
     {"nome": "JOGod", "id": "1480613"},
