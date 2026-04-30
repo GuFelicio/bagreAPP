@@ -27,7 +27,7 @@ def iniciar_driver():
     options.add_argument('--start-maximized')
     
     try:
-        driver = uc.Chrome(version_main=145, options=options, use_subprocess=True)
+        driver = uc.Chrome(version_main=147, options=options, use_subprocess=True)
         time.sleep(2)
         if len(driver.window_handles) > 0:
             driver.switch_to.window(driver.window_handles[0])

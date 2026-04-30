@@ -8,7 +8,7 @@ from selenium.webdriver.common.by import By
 
 # --- CONFIGURAÇÃO DOS PARTICIPANTES ---
 PARTICIPANTES = [
-    {"nome": "gfelicio", "id": "3250002"},
+    {"nome": "gfelicio", "id": "325002"},
     {"nome": "wEs", "id": "1718975"},
     {"nome": "BioAlarcon", "id": "1823210"},
     {"nome": "JOGod", "id": "1480613"},
@@ -26,7 +26,7 @@ def iniciar_driver():
     options.add_argument('--disable-gpu')
     
     try:
-        driver = uc.Chrome(version_main=145, options=options, use_subprocess=True)
+        driver = uc.Chrome(version_main=147, options=options, use_subprocess=True)
         return driver
     except Exception as e:
         print(f"\n❌ ERRO CRÍTICO: {e}")
@@ -37,7 +37,7 @@ def extrair_dados_dashboard(driver, player):
     player_id = player['id']
     
     print(f"\n--- 👤 Analisando: {nome} ---")
-    driver.get(f"https://cs.gamersclub.gg/player/{player_id}")
+    driver.get(f"https://gamersclub.com.br/player/{player_id}")
     
     print(f"📍 Aguardando você carregar o dashboard de {nome}...")
     input(f"👉 Escolha o mês no navegador e, quando os números aparecerem, aperte ENTER aqui...")
